@@ -1,0 +1,7 @@
+{
+  "_说明": "本机配置，不入库。复制成 config.json 后按需改。全部字段都可省略：省了就走自动探测/系统字体。",
+  "_draft_root": "剪映草稿根目录。只有当 doctor.py 报「剪映草稿目录 未找到」时才需要填。%LOCALAPPDATA% 会自动展开。",
+  "draft_root": "%LOCALAPPDATA%/JianyingPro/User Data/Projects/com.lveditor.draft",
+  "_font_path": "字幕字体文件路径。留空则用系统微软雅黑（Windows: C:/Windows/Fonts/msyh.ttc）。想用剪映素材库里下载过的字体，就填它的缓存路径。",
+  "font_path": ""
+}

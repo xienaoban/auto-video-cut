@@ -1,0 +1,97 @@
+{
+ "is_tone_modify": false,
+ "enable_color_adjust_pro": false,
+ "enable_adjust_mask": false,
+ "keyframe_refs": [],
+ "enable_adjust": true,
+ "enable_video_mask": true,
+ "enable_hsl": false,
+ "speed": 1,
+ "clip": {
+  "rotation": 0,
+  "transform": {
+   "y": 0,
+   "x": 0
+  },
+  "flip": {
+   "horizontal": false,
+   "vertical": false
+  },
+  "scale": {
+   "y": 1,
+   "x": 1
+  },
+  "alpha": 1
+ },
+ "intensifies_audio": false,
+ "uniform_scale": {
+  "on": true,
+  "value": 1
+ },
+ "responsive_layout": {
+  "vertical_pos_layout": 0,
+  "target_follow": "",
+  "enable": false,
+  "horizontal_pos_layout": 0,
+  "size_layout": 0
+ },
+ "segment_color_tag": "",
+ "enable_hsl_curves": true,
+ "desc": "",
+ "state": 0,
+ "enable_lut": true,
+ "reverse": false,
+ "target_timerange": {
+  "start": 0,
+  "duration": 18100000
+ },
+ "is_loop": false,
+ "enable_color_correct_adjust": false,
+ "visible": true,
+ "enable_smart_color_adjust": false,
+ "source": "segmentsourcenormal",
+ "render_timerange": {
+  "start": 0,
+  "duration": 0
+ },
+ "render_index": 0,
+ "enable_mask_shadow": false,
+ "group_id": "",
+ "enable_color_match_adjust": false,
+ "enable_color_curves": true,
+ "raw_segment_id": "",
+ "enable_mask_stroke": false,
+ "color_correct_alg_result": "",
+ "digital_human_template_group_id": "",
+ "cartoon": false,
+ "common_keyframes": [],
+ "is_placeholder": false,
+ "template_id": "",
+ "id": "59ADC166-D2CA-48c4-80C6-A53ED5AE1F05",
+ "enable_color_wheels": true,
+ "extra_material_refs": [
+  "4FE49D6C-BC69-482c-9C54-EABFEF22C971",
+  "F1CD9E56-D7D8-41b6-A979-4F814CD1AB56",
+  "7B31BD16-F8DC-4182-8113-1B08D9F0D570",
+  "4178D907-C054-4055-83D6-F0A6875CD7BB",
+  "14D6E23F-9001-42a1-8736-3C949357E17A",
+  "9DE3D2AF-879E-4dc2-9C66-9A0A9C11E7E7",
+  "D2EA554B-7BD2-4031-8108-E158F3E7739D",
+  "4C313AA4-EBCC-4b02-B99A-83EBC31E5E2A"
+ ],
+ "last_nonzero_volume": 1,
+ "template_scene": "default",
+ "material_id": "C98DE477-DDC3-4131-8EFE-6036D9818DB2",
+ "track_attribute": 0,
+ "volume": 1,
+ "track_render_index": 0,
+ "hdr_settings": {
+  "mode": 1,
+  "intensity": 1,
+  "nits": 1000
+ },
+ "source_timerange": {
+  "start": 4800000,
+  "duration": 18100000
+ }
+}

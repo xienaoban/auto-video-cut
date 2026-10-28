@@ -1,0 +1,83 @@
+{
+ "is_tone_modify": false,
+ "enable_color_adjust_pro": false,
+ "enable_adjust_mask": false,
+ "keyframe_refs": [],
+ "enable_adjust": false,
+ "enable_video_mask": true,
+ "enable_hsl": false,
+ "speed": 1,
+ "clip": {
+  "rotation": 0,
+  "transform": {
+   "y": -0.119162640901771,
+   "x": -0.548913043478261
+  },
+  "flip": {
+   "horizontal": false,
+   "vertical": false
+  },
+  "scale": {
+   "y": 0.717555953830227,
+   "x": 0.717555953830227
+  },
+  "alpha": 1
+ },
+ "intensifies_audio": false,
+ "uniform_scale": {
+  "on": true,
+  "value": 1
+ },
+ "responsive_layout": {
+  "vertical_pos_layout": 0,
+  "target_follow": "",
+  "enable": false,
+  "horizontal_pos_layout": 0,
+  "size_layout": 0
+ },
+ "segment_color_tag": "",
+ "enable_hsl_curves": true,
+ "desc": "",
+ "state": 0,
+ "enable_lut": false,
+ "reverse": false,
+ "target_timerange": {
+  "start": 21100000,
+  "duration": 9766666
+ },
+ "is_loop": false,
+ "enable_color_correct_adjust": false,
+ "visible": true,
+ "enable_smart_color_adjust": false,
+ "source": "segmentsourcenormal",
+ "render_timerange": {
+  "start": 0,
+  "duration": 0
+ },
+ "render_index": 14000,
+ "enable_mask_shadow": false,
+ "group_id": "",
+ "enable_color_match_adjust": false,
+ "volume": 1,
+ "raw_segment_id": "",
+ "enable_mask_stroke": false,
+ "color_correct_alg_result": "",
+ "digital_human_template_group_id": "",
+ "track_render_index": 7,
+ "common_keyframes": [],
+ "id": "1C24AAD8-A663-4c5d-BE9A-89E915F08E41",
+ "enable_color_wheels": true,
+ "extra_material_refs": [
+  "C179087A-8C30-4bdc-AC3C-D145EEB5E72C",
+  "CEE8E69B-9BDA-40e2-859F-E54B76DBC1A8",
+  "CEE8E69B-9BDA-40e2-859F-E54B76DBC1A8"
+ ],
+ "last_nonzero_volume": 1,
+ "template_scene": "default",
+ "material_id": "978357BE-8B89-4f97-A92A-4FC8C79D709A",
+ "template_id": "",
+ "is_placeholder": false,
+ "track_attribute": 0,
+ "enable_color_curves": true,
+ "cartoon": false
+}

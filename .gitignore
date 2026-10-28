@@ -1,0 +1,23 @@
+# 第三方依赖：用 requirements.txt 重建，不入库
+.vendor/
+venv/
+.venv/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 工作目录里的构建产物（万一直接在工具目录里跑过）
+.jybuild/
+work/
+
+# 本地配置（每台机器的剪映路径不同）
+config.json
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

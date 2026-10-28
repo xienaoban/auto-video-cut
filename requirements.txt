@@ -1,0 +1,8 @@
+# 唯一需要第三方包的模块：配音（配音: edge）
+# 安装到工具目录的 .vendor/，不污染系统 Python，也不碰系统 PATH 里的 Python：
+#   python install.py                 （推荐，会检查解释器、清缓存、验证导入）
+#   python install.py --index-url tuna  （国内网络慢时换镜像）
+# 等价的手工命令：
+#   python -m pip install --target .vendor -r requirements.txt
+# 不装也能用：会自动回退到「剪映朗读」模式（按字数估算时长，音频在剪映里生成）
+edge-tts>=7.3,<8

@@ -1,0 +1,13 @@
+# 跨平台统一用 LF，避免 Windows/macOS 来回改换行造成满屏 diff
+* text=auto eol=lf
+
+*.py    text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.txt   text eol=lf
+
+*.ttf   binary
+*.pyd   binary
+*.so    binary
+*.mp4   binary
+*.wav   binary
