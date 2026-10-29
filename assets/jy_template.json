@@ -1,0 +1,164 @@
+{
+ "_meta": {
+  "version": "11.6.0.14552",
+  "source": "10月30日 草稿全量备份 20261030_015936",
+  "note": "字段原样取自剪映自己保存的草稿，只存不用改；运行时换掉全部 id、时间、文本、路径。"
+ },
+ "text": {
+  "segment": {
+   "id": "1244B77B-A2D6-4f25-91AE-BBAB86FE923C",
+   "target_timerange": {
+    "start": 22066666,
+    "duration": 15500000
+   },
+   "render_timerange": {},
+   "clip": {
+    "scale": {
+     "x": 1.0,
+     "y": 1.0
+    },
+    "transform": {
+     "x": 0.0,
+     "y": 0.0
+    },
+    "flip": {}
+   },
+   "uniform_scale": {},
+   "material_id": "3F471496-644C-4b68-96E9-EC3628F7E381",
+   "extra_material_refs": [
+    "FC7D6B45-F410-43a0-AE78-9B58D26A1293"
+   ],
+   "render_index": 14000,
+   "enable_lut": false,
+   "enable_adjust": false,
+   "enable_hsl": false,
+   "track_render_index": 2,
+   "responsive_layout": {},
+   "enable_adjust_mask": false,
+   "source": "segmentsourcenormal"
+  },
+  "materials": {
+   "texts": [
+    {
+     "id": "3F471496-644C-4b68-96E9-EC3628F7E381",
+     "type": "text",
+     "content": "{\"text\":\"看到了吗大肥鱼\",\"styles\":[{\"fill\":{\"content\":{\"render_type\":\"solid\",\"solid\":{\"color\":[1,1,1]}}},\"font\":{\"path\":\"C:/Users/xie/AppData/Local/JianyingPro/Apps/11.6.0.14552/Resources/Font/SystemFont/zh-hans.ttf\",\"id\":\"\"},\"size\":15,\"range\":[0,7]}]}",
+     "words": {},
+     "current_words": {},
+     "combo_info": {},
+     "caption_template_info": {
+      "resource_id": "",
+      "path": ""
+     },
+     "layer_weight": 1,
+     "line_spacing": 0.02,
+     "shadow_alpha": 0.9,
+     "shadow_smoothing": 0.45,
+     "shadow_distance": 5.0,
+     "shadow_point": {
+      "x": 0.6363961030678928,
+      "y": -0.6363961030678928
+     },
+     "shadow_angle": -45.0,
+     "border_width": 0.08,
+     "text_color": "#FFFFFF",
+     "font_path": "C:/Users/xie/AppData/Local/JianyingPro/Apps/11.6.0.14552/Resources/Font/SystemFont/zh-hans.ttf",
+     "initial_scale": 1.0,
+     "force_apply_line_max_width": true,
+     "lyrics_template": {
+      "resource_id": "",
+      "path": ""
+     }
+    }
+   ],
+   "material_animations": [
+    {
+     "id": "FC7D6B45-F410-43a0-AE78-9B58D26A1293",
+     "type": "sticker_animation"
+    }
+   ]
+  }
+ },
+ "audio": {
+  "segment": {
+   "id": "B10C53AC-B43F-4f0f-A7F1-37FD2ADE69BE",
+   "source_timerange": {
+    "start": 0,
+    "duration": 1680000
+   },
+   "target_timerange": {
+    "start": 22066666,
+    "duration": 1680000
+   },
+   "render_timerange": {},
+   "material_id": "A5F6E0C2-CD3D-48E1-BFB6-973B9EC17464",
+   "extra_material_refs": [
+    "9009463B-C28E-4837-998A-93EB9F58CB6C",
+    "E207E6EF-9C8C-4955-99CA-339E0F0EF8AC",
+    "1C8F117B-7867-4a93-B54B-4A0F2AE7F7BE",
+    "B66FAA19-D63A-43e9-9A0B-00190E8BE50F",
+    "EE159C32-1701-4a40-86DD-AF75E058693C"
+   ],
+   "enable_lut": false,
+   "enable_adjust": false,
+   "enable_hsl": false,
+   "track_render_index": 3,
+   "responsive_layout": {},
+   "enable_adjust_mask": false,
+   "source": "segmentsourcenormal"
+  },
+  "materials": {
+   "audios": [
+    {
+     "id": "A5F6E0C2-CD3D-48E1-BFB6-973B9EC17464",
+     "type": "extract_music",
+     "name": "看到了吗大肥鱼（曼波）",
+     "duration": 1680000,
+     "path": "E:\\project-video\\生物辞典5\\音频\\曼波_看到了吗大肥鱼.wav",
+     "resource_id": "",
+     "similiar_music_info": {},
+     "tts_generate_scene": "audio_panel",
+     "tts_benefit_info": {
+      "benefit_type": "none"
+     }
+    }
+   ],
+   "speeds": [
+    {
+     "id": "9009463B-C28E-4837-998A-93EB9F58CB6C",
+     "type": "speed"
+    }
+   ],
+   "placeholder_infos": [
+    {
+     "id": "E207E6EF-9C8C-4955-99CA-339E0F0EF8AC",
+     "type": "placeholder_info",
+     "meta_type": "none"
+    }
+   ],
+   "beats": [
+    {
+     "id": "1C8F117B-7867-4a93-B54B-4A0F2AE7F7BE",
+     "type": "beats",
+     "ai_beats": {
+      "melody_percents": [
+       0.0
+      ]
+     }
+    }
+   ],
+   "sound_channel_mappings": [
+    {
+     "id": "B66FAA19-D63A-43e9-9A0B-00190E8BE50F",
+     "type": "none"
+    }
+   ],
+   "vocal_separations": [
+    {
+     "id": "EE159C32-1701-4a40-86DD-AF75E058693C",
+     "type": "vocal_separation"
+    }
+   ]
+  }
+ }
+}

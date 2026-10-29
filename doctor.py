@@ -129,6 +129,20 @@ def main():
     add("字段模板 assets/", not missing,
         "齐全" if not missing else "缺失: " + ", ".join(missing))
 
+    # 内置片段模板：草稿里没有同类片段时靠它顶上，缺了不影响建草稿但会卡住加字幕
+    tf = os.path.join(jylib.ASSETS, "jy_template.json")
+    if os.path.exists(tf):
+        try:
+            with open(tf, encoding="utf-8") as f:
+                tpl = json.load(f)
+            kinds = [k for k in ("text", "audio") if k in tpl]
+            add("片段模板", set(kinds) == {"text", "audio"},
+                "%s（%s 字节）" % ("/".join(kinds) or "空", os.path.getsize(tf)))
+        except (OSError, ValueError) as e:
+            add("片段模板", False, "读不动 %s: %s" % (tf, e))
+    else:
+        add("片段模板", False, "缺 %s，草稿里没有字幕/音频样本时加不了" % tf)
+
     root = jycore.draft_root()
     if os.environ.get(jycore.ENV_DRAFT_ROOT):
         dsrc = jycore.ENV_DRAFT_ROOT

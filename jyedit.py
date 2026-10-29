@@ -5,8 +5,15 @@
     jylib.Draft   —— 从零造一份草稿（剪映还没碰过，靠模板拼字段）
     jyedit.Editor —— 剪映已经接管过的草稿（加密、多时间轴），在它上面继续加工
 
-原则：**不手拼字段**。新增的段落和素材一律克隆草稿里已经存在的同类对象，
+原则：**不手拼字段**。新增的段落和素材一律照抄剪映自己写过的结构，
 只换 id、路径、时间、文字。这样剪映自己的校验怎么严都不会踩空。
+
+结构从哪抄，两处来源，按先后：
+    1. 草稿里已经有的同类片段（尊重你在剪映里调好的样式）
+    2. `assets/jy_template.json`（从 11.6 真实草稿固化的模板）
+
+第 2 条是为了对付“你粗剪完只有视频轨”的情形——那时候草稿里一条字幕、
+一段音频都没有，光靠第 1 条会直接卡住。剪映版本已锚定，所以模板不会过期。
 
 用法：
     ed = Editor("10月30日")
@@ -19,12 +26,49 @@
 import copy
 import json
 import os
+import re
 import subprocess
 import uuid
 
 import jycore
 
 US = 1_000_000
+
+TEMPLATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "assets", "jy_template.json")
+_tpl_cache = {}
+_app_dir_cache = []
+
+# 模板里存着提取时那台机器的剪映安装路径（字体在里面），换机要跟着改。
+# 必须限定“整串就是一条绝对路径”，否则会把 content 这种 JSON 字符串也当成路径。
+APP_PATH_RE = re.compile(
+    r"^(?:[A-Za-z]:|/)[^\"{}]*?(?:JianyingPro[/\\]Apps[/\\][^/\\]+)([/\\].*)$")
+
+
+def fix_app_path(path):
+    """把模板里写死的剪映安装目录换成当前这台机器的。
+
+    字体是 `<剪映安装目录>/Resources/Font/SystemFont/zh-hans.ttf`，
+    安装位置变了就会指到不存在的地方。
+    """
+    m = APP_PATH_RE.match(path)
+    if not m:
+        return path
+    if not _app_dir_cache:
+        _app_dir_cache.append(jycore.app_dir().replace("\\", "/"))
+    return _app_dir_cache[0] + m.group(1)
+
+
+def builtin_template(kind):
+    """读取固化的片段模板。字段原样取自剪映自己保存的草稿，不做任何加工。"""
+    if not _tpl_cache:
+        if not os.path.exists(TEMPLATE_FILE):
+            raise RuntimeError("缺少内置模板：%s" % TEMPLATE_FILE)
+        with open(TEMPLATE_FILE, encoding="utf-8") as f:
+            _tpl_cache.update(json.load(f))
+    if kind not in _tpl_cache:
+        raise RuntimeError("内置模板里没有 %s 这类片段" % kind)
+    return _tpl_cache[kind]
 
 
 def uid():
@@ -116,6 +160,37 @@ class Editor(object):
                     break
         return new_refs
 
+    def _from_builtin(self, kind):
+        """用内置模板造一套新片段 + 素材，全部 id 换新。
+
+        模板里的素材互相之间有 id 引用（片段的 material_id、extra_material_refs，
+        附属素材之间的 material_id 等），所以不是逐个换，而是先把所有旧 id 建成
+        一张映射表，再递归遍历整棵结构替换。这样漏改的概率是零。
+        """
+        tpl = builtin_template(kind)
+        seg = copy.deepcopy(tpl["segment"])
+        mats = copy.deepcopy(tpl["materials"])
+
+        olds = [seg["id"]]
+        for arr in mats.values():
+            olds.extend(m["id"] for m in arr)
+        remap = {old: uid() for old in olds}
+
+        def fix(node):
+            if isinstance(node, dict):
+                return {k: fix(v) for k, v in node.items()}
+            if isinstance(node, list):
+                return [fix(v) for v in node]
+            if isinstance(node, str):
+                return fix_app_path(remap.get(node, node))
+            return node
+
+        seg = fix(seg)
+        for k, arr in mats.items():
+            self.mats.setdefault(k, [])
+            self.mats[k].extend(fix(arr))
+        return seg
+
     def _append_track(self, track_type, seg):
         seg["track_render_index"] = len(self.doc["tracks"])
         self.doc["tracks"].append({
@@ -124,41 +199,59 @@ class Editor(object):
         })
 
     # ------------------------------------------------------------ 文字
-    def add_text(self, text, start_us, duration_us, template_text=None):
-        """加一条字幕。template_text 指定以哪条已有字幕为样式模板（默认取第一条）。"""
-        tpl_seg = None
-        for t in self.doc["tracks"]:
-            if t.get("type") != "text":
-                continue
-            for s in t.get("segments") or []:
-                if template_text is None:
-                    tpl_seg = s
-                    break
-                m = self._material_of(s, "texts")
-                if json.loads(m["content"]).get("text") == template_text:
-                    tpl_seg = s
-                    break
-            if tpl_seg:
-                break
-        if tpl_seg is None:
-            raise RuntimeError("草稿里没有可作模板的文字片段。\n"
-                               "先在剪映里随手加一条字幕并保存，再来加批量字幕。")
+    def add_text(self, text, start_us, duration_us, template=None):
+        """加一条字幕。
 
-        mat = copy.deepcopy(self._material_of(tpl_seg, "texts"))
-        mat["id"] = uid()
+        template 决定样式从哪来：
+            None（默认）  草稿里已有文字片段就沿用它——尊重你在剪映里调好的字体
+                         和描边；一条都没有（刚粗剪完就是这样）就退回内置模板
+            "builtin"     强制用内置模板，不受草稿里已有字幕影响
+            其他字符串    以文本内容等于它的那条字幕为样式模板
+        """
+        tpl_seg = None
+        if template != "builtin":
+            found = False
+            for t in self.doc["tracks"]:
+                if t.get("type") != "text":
+                    continue
+                for s in t.get("segments") or []:
+                    if template is None:
+                        tpl_seg = s
+                        break
+                    m = self._material_of(s, "texts")
+                    if json.loads(m["content"]).get("text") == template:
+                        tpl_seg = s
+                        break
+                if tpl_seg:
+                    found = True
+                    break
+            if template not in (None, "builtin") and not found:
+                raise RuntimeError("草稿里没有文本为「%s」的字幕可作模板。" % template)
+
+        if tpl_seg is None:
+            seg = self._from_builtin("text")
+            mat = self._material_of(seg, "texts")
+        else:
+            mat = copy.deepcopy(self._material_of(tpl_seg, "texts"))
+            mat["id"] = uid()
+            self.mats["texts"].append(mat)
+            seg = copy.deepcopy(tpl_seg)
+            seg["id"] = uid()
+            seg["material_id"] = mat["id"]
+            seg["extra_material_refs"] = self._clone_refs(tpl_seg)
+
         content = json.loads(mat["content"])
         content["text"] = text
         for st in content.get("styles") or []:
             st["range"] = [0, len(text)]
+            # content 是 JSON 字符串，递归替换够不到里面，字体路径单独修
+            font = st.get("font") or {}
+            if font.get("path"):
+                font["path"] = fix_app_path(font["path"])
         mat["content"] = json.dumps(content, ensure_ascii=False,
                                     separators=(",", ":"))
         mat.pop("text_to_audio_ids", None)   # 不继承别人的朗读关联
-        self.mats["texts"].append(mat)
 
-        seg = copy.deepcopy(tpl_seg)
-        seg["id"] = uid()
-        seg["material_id"] = mat["id"]
-        seg["extra_material_refs"] = self._clone_refs(tpl_seg)
         seg["target_timerange"] = {"start": int(start_us),
                                    "duration": int(duration_us)}
         seg.pop("common_keyframes", None)
@@ -181,18 +274,30 @@ class Editor(object):
 
     # ------------------------------------------------------------ 音频
     def add_audio(self, path, start_us, duration_us=None, volume=1.0):
-        tpl_seg = self._first_segment("audio")
-        if tpl_seg is None:
-            raise RuntimeError("草稿里没有音频片段可当模板。\n"
-                               "先在剪映里放一段声音（比如加一次朗读）再试。")
+        """加一段配音/音乐。草稿里已有音频片段就沿用它的结构，没有就用内置模板。
+
+        素材一律换成 extract_music 指向本地文件，不碰剪映的云端音色，
+        所以导出时不会触发会员校验。
+        """
         path = self._intake(path, "audio")
         meta = probe(path)
         real = int(meta["duration"] * US)
         dur = min(int(duration_us), real) if duration_us else real
 
-        mat = copy.deepcopy(self._material_of(tpl_seg, "audios"))
+        tpl_seg = self._first_segment("audio")
+        if tpl_seg is None:
+            seg = self._from_builtin("audio")
+            mat = self._material_of(seg, "audios")
+        else:
+            mat = copy.deepcopy(self._material_of(tpl_seg, "audios"))
+            mat["id"] = uid()
+            self.mats["audios"].append(mat)
+            seg = copy.deepcopy(tpl_seg)
+            seg["id"] = uid()
+            seg["material_id"] = mat["id"]
+            seg["extra_material_refs"] = self._clone_refs(tpl_seg)
+
         mat.update({
-            "id": uid(),
             "type": "extract_music",
             "name": os.path.basename(path),
             "path": path,
@@ -204,12 +309,7 @@ class Editor(object):
             "tone_platform": "",
             "resource_id": "",
         })
-        self.mats["audios"].append(mat)
 
-        seg = copy.deepcopy(tpl_seg)
-        seg["id"] = uid()
-        seg["material_id"] = mat["id"]
-        seg["extra_material_refs"] = self._clone_refs(tpl_seg)
         seg["target_timerange"] = {"start": int(start_us), "duration": dur}
         seg["source_timerange"] = {"start": 0, "duration": dur}
         seg["volume"] = volume
