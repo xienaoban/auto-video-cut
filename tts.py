@@ -32,6 +32,8 @@ import re
 import subprocess
 import sys
 
+import jycore
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 VENDOR = os.path.join(HERE, ".vendor")
 if os.path.isdir(VENDOR) and VENDOR not in sys.path:
@@ -82,7 +84,7 @@ def _key(text, voice, rate):
 
 def _probe(path):
     out = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+        [jycore.tool("ffprobe"), "-v", "error", "-show_entries", "format=duration",
          "-of", "csv=p=0", path],
         capture_output=True, text=True)
     try:
@@ -97,7 +99,7 @@ def _trim(src, dst):
           "areverse,"
           "silenceremove=start_periods=1:start_silence=0.04:start_threshold=-45dB,"
           "areverse")
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", src,
+    subprocess.run([jycore.tool("ffmpeg"), "-y", "-v", "error", "-i", src,
                     "-af", af, "-ar", "48000", "-ac", "1", dst],
                    capture_output=True, check=True)
 
@@ -105,7 +107,7 @@ def _trim(src, dst):
 def _lead_silence_ms(path):
     """测原始音频开头有多少静音（毫秒）。没有就返回 0。"""
     p = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-i", path, "-af",
+        [jycore.tool("ffmpeg"), "-hide_banner", "-i", path, "-af",
          "silencedetect=noise=-45dB:d=0.04", "-f", "null", "-"],
         capture_output=True, text=True, encoding="utf-8", errors="replace")
     at_zero = False

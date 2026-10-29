@@ -40,8 +40,10 @@
 | 安装任何 Python 包 / 软件 | 工具已自包含。`.vendor/` 缺失时先让用户显式同意再装，见下 |
 | 覆盖用户已有的剪映工程 | 同名草稿会被覆盖。命名前先想清楚，见 §3.6 |
 | 手动编辑 `.jybuild/draft_content.json` | 改了就重跑 `build.py`，别手改 |
+| 猜工作目录、往 `AVC_PROJECT_DIR` 之外写文件 | 目录靠环境变量给，猜错会把素材写到别人家，见 §2 |
 
-允许：在工作目录里创建/覆盖 `script.md` 和 `.jybuild/`，在剪映草稿目录里创建草稿。
+允许：在 `$AVC_PROJECT_DIR` 里创建/覆盖 `script.md`、`音频/`、`图片/` 和 `.jybuild/`，
+在剪映草稿目录里创建草稿。
 
 **`.vendor/` 缺失怎么办**：这是从 git 仓库克隆后的正常状态（第三方包不入库）。
 `doctor.py` 会报 `edge-tts 未安装`。此时工具仍能出片，只是走「剪映朗读」模式、
@@ -73,11 +75,52 @@ python PIPELINE/install.py
 
 ## 2. 工作目录约定
 
-用户在**任意目录**投入素材，该目录就是工作目录。你的读写都发生在这里。
+工作目录（视频工程目录）由**环境变量 `AVC_PROJECT_DIR`** 指定。工具只认它，不猜：
+
+```bash
+export AVC_PROJECT_DIR=/e/project-video/生物辞典5          # Git Bash
+$env:AVC_PROJECT_DIR = 'E:\project-video\生物辞典5'        # PowerShell
+```
+
+规则是硬的，不是文档里的建议：
+
+- 读不到变量 → 任何涉及工程目录的操作直接抛错，不写草稿
+- 变量指向的目录不存在 → 报错
+- 目录里**没有 `视频/` 子目录** → 报错，因为这基本等于路径写错了
+- 你在哪个目录启动 session 不影响判断；读写全部落在 `AVC_PROJECT_DIR`
+- `python doctor.py` 把这条列为阻塞项，开工前先跑一遍
+
+为什么不猜：一个 session 里同时看得见草稿目录、素材目录、工具目录，猜错一次
+就把配音写到别人家去了。宁可停下报错。
+
+优先级：**显式参数 > `AVC_PROJECT_DIR` > 报错**。所以 `build.py .` 这类把目录当
+参数传的命令行工具照旧能用（参数就是明确指定），但库层（`jyedit.Editor`）不给参数
+时必须从环境变量拿到工程目录。
+
+### 2.0 变量一览
+
+| 变量 | 必需 | 作用 | 不写时 |
+|---|---|---|---|
+| `AVC_PROJECT_DIR` | **是** | 本次视频工程目录，素材落盘 + 备份 + 草稿引用都在这下面 | 报错，不猜 |
+| `AVC_JIANYING_DIR` | 否 | 含 `videoeditor.dll` 的那一层 | 扫 `%LOCALAPPDATA%\JianyingPro\Apps\`，锚定 11.6.0.14552 |
+| `AVC_DRAFT_ROOT` | 否 | 草稿根目录 | `JIANYING_DRAFT_ROOT`（旧名）→ `config.json` → 默认位置 |
+| `AVC_FFMPEG_DIR` | 否 | 含 `ffmpeg.exe` 的目录 | 走 `PATH` |
+
+可选项写了就优先，但指错会直接报错（目录里没有 `videoeditor.dll` / `ffmpeg.exe`），
+**不静默退回探测**。java 不需要。
+
+shell 不持久：WorkBuddy 每次命令都是新进程，`export` 只在那一条命令里有效。
+所以要么在 WorkBuddy 设置里配变量，要么每条命令带前缀：
+
+```bash
+AVC_PROJECT_DIR=/e/project-video/生物辞典5 python doctor.py
+```
 
 ```
 <工作目录>/                     ← 用户在这里打开你
 ├─ script.md                    ← 你写：文案与分镜
+├─ 音频/                        ← 你写：配音、从剪映抽回来的朗读（见 §2.1）
+├─ 图片/                        ← 你写：配图、封面
 ├─ 任意名字的素材（可散放、可建子目录）
 │   ├─ xxx.mp4
 │   └─ images/封面.png
@@ -92,6 +135,33 @@ python PIPELINE/install.py
 
 素材支持**任意子目录深度**，引用时写相对工作目录的路径（`素材/片段3.mp4`）。
 不写素材路径时，工具会自动轮播工作目录里的所有视频。
+
+### 2.1 素材落盘规矩（硬约束）
+
+草稿里引用的路径**必须落在本次工作目录内**。以下位置一律不许出现在草稿的
+`materials[].path` 里：
+
+- `...\JianyingPro\User Data\Projects\...\<草稿>\textReading\`（剪映朗读缓存）
+- 剪映的 effect / 素材缓存目录
+- 工具仓库自己的 `tmp/`、`.tmp/`
+
+原因：这些地方换机器、清缓存就没了，剪映打开或导出时直接找不到素材。
+
+所以凡是"你生成或从别处回收来的素材"，先复制进工作目录，再引用副本：
+
+```
+<工作目录>/音频/    ← 配音、从剪映草稿抽回来的朗读、任何 wav/mp3
+<工作目录>/图片/    ← ImageGen 出的配图、截图、封面
+<工作目录>/视频/    ← 用户自己的素材（已有就沿用，不要搬动）
+```
+
+- 文件名带语义：`曼波_看到了吗大肥鱼.wav` 好过 `6ae37d04dfb36e01.wav`
+- 路径一律正斜杠（`E:/project-video/xxx/音频/a.wav`），跟剪映自己写的一致
+- 同名但内容不同不要覆盖，`jycore.import_media()` 会自动加 `_2`
+
+`jyedit.Editor(...)` 内建了这件事：`add_audio`、`add_image`、`replace_media` 都会
+先把文件收进 `AVC_PROJECT_DIR` 下的对应目录，草稿只引用副本。工程目录读不到就报错。
+只有隔离测试才显式传 `media_root=""` 绕过。
 
 ---
 
@@ -205,14 +275,29 @@ python PIPELINE/build.py .
 
 第二轮会发生这些事，**顺序很重要**：
 
-1. 先读同名草稿的 `Timelines/*/template.json`，把每条朗读音频连同真实时长
-   收进 `.jybuild/剪映配音/`（`cuttts.py` 干这个）；
+1. 先读同名草稿的 `Timelines/<时间轴id>/draft_content.json`（解密），把每条朗读音频
+   连同真实时长收进 `.jybuild/剪映配音/`（`cuttts.py` 干这个）；
 2. 再按"字幕原文"匹配，命中的字幕用真实时长排，没命中的按 `估速` 兜底；
 3. 然后才覆盖草稿——所以音频**先被救出来了**，覆盖不会丢。
 
 为什么必须救出来：朗读音频原本在 `<草稿>/textReading/*.wav`，跟着草稿目录走。
 覆盖草稿就没了，而且它只在那个草稿目录里有效。收进工作目录之后，
 它就是一个普通 wav——不依赖剪映版本、不依赖草稿目录，还能跨期复用。
+
+**要保留朗读就在剪映里留住，导出前还得冻结一次**：剪映写进草稿的朗读素材是
+`type: text_to_audio`，带 `resource_id` / `tone_speaker` / `tone_platform`
+指向云端音色。导出时它按 TTS 产物处理，要跟剪映的服务核对，联网校验不过就可能
+没声音。冻结的做法是换成普通音频素材，片段位置和附属素材都不动：
+
+```python
+ed = jyedit.Editor("第四期", media_root=r"E:/project-video/生物辞典5").open()
+ed.replace_media(seg_id, r"E:/project-video/生物辞典5/音频/曼波_某句话.wav")
+ed.commit()
+```
+
+换完素材类型是 `extract_music`、路径在工作目录里、`resource_id` 为空，
+剪映就只当它是一段本地音频。顺带会清掉文本素材上的 `text_to_audio_ids`
+（注意这个字段存的是**片段 id**，不是素材 id）。
 
 输出里会看到命中情况：
 

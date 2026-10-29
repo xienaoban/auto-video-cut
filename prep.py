@@ -10,6 +10,7 @@ import math
 import os
 import subprocess
 
+import jycore
 from jylib import ffprobe
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -57,7 +58,7 @@ def normalize(src, width, height, fps=30, fit="cover", tag=""):
               "pad=%d:%d:(ow-iw)/2:(oh-ih)/2:color=black,fps=%d,setsar=1"
               % (width, height, width, height, fps))
 
-    _run(["ffmpeg", "-y", "-v", "error", "-i", src,
+    _run([jycore.tool("ffmpeg"), "-y", "-v", "error", "-i", src,
           "-vf", vf,
           "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
           "-pix_fmt", "yuv420p",
@@ -86,13 +87,13 @@ def still(image, duration, width, height, fps=30, kenburns=True, zoom=0.12):
         z = "min(1+%.4f*on/%d,%.3f)" % (zoom, frames, 1 + zoom)
         vf = (pre + ",zoompan=z='%s':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
               ":d=%d:s=%dx%d:fps=%d,setsar=1" % (z, frames, width, height, fps))
-        _run(["ffmpeg", "-y", "-v", "error", "-loop", "1", "-i", image,
+        _run([jycore.tool("ffmpeg"), "-y", "-v", "error", "-loop", "1", "-i", image,
               "-vf", vf, "-frames:v", str(frames),
               "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
               "-pix_fmt", "yuv420p", dst])
     else:
         vf = pre + ",scale=%d:%d,setsar=1" % (width, height)
-        _run(["ffmpeg", "-y", "-v", "error", "-loop", "1", "-i", image,
+        _run([jycore.tool("ffmpeg"), "-y", "-v", "error", "-loop", "1", "-i", image,
               "-vf", vf, "-r", str(fps), "-frames:v", str(frames),
               "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
               "-pix_fmt", "yuv420p", dst])

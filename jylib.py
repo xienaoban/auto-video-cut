@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-剪映 11.x 明文草稿生成库
+从零造一份剪映草稿（剪映还没打开过的那种）。
+
 纯 Python 标准库 + 系统已装的 ffmpeg/ffprobe，不需要安装任何第三方包。
 
-原理：剪映 11 把 draft_content.json 加密了，但同目录的明文 template.json 暴露了
-完整字段结构；草稿索引 root_meta_info.json 也是明文。所以只要按同样的字段写一份
-明文草稿并注册到索引，剪映就能正常打开（已实测通过）。
+和 jycrypto / jycore / jyedit 的分工：
+    这里写的是**全新的明文草稿**，剪映第一次打开时会自己做容错、补出 Timelines 目录。
+    草稿一旦被剪映接管（加密 + 多时间轴），增量修改请走 jyedit.Editor，
+    不要用这个类去覆盖——那会把剪映写进去的东西抹掉。
 """
 import json
 import os
@@ -13,6 +15,8 @@ import shutil
 import subprocess
 import time
 import uuid
+
+import jycore
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(HERE, "assets")
@@ -130,7 +134,7 @@ def hex_to_rgb(h):
 
 def ffprobe(path):
     """返回 dict: duration(秒), width, height, has_audio"""
-    cmd = ["ffprobe", "-v", "error", "-print_format", "json",
+    cmd = [jycore.tool("ffprobe"), "-v", "error", "-print_format", "json",
            "-show_format", "-show_streams", path]
     out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
     if out.returncode != 0:

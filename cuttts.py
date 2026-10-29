@@ -10,41 +10,34 @@
       2. 变成普通 wav，任何工具都能用
       3. 草稿被覆盖、剪映被卸载，音频都还在
 
-数据结构（来自 <草稿>/Timelines/<uuid>/template.json，明文）：
+数据结构（读 <草稿>/Timelines/<时间轴id>/draft_content.json，解密后）：
     materials.audios[]   其中 type == "text_to_audio" 的是朗读音频
         text_id     → 指向 materials.texts[].id
-        path        "textReading/xxx.wav"，相对草稿目录
+        path        "##_draftpath_placeholder_xxx_##/textReading/yyy.wav"，
+                    去掉占位前缀后是相对草稿目录的路径
         duration    帧对齐后的真实时长（微秒），比 wav 实际长约 0~33ms
+        tone_speaker / tone_effect_name   朗读用的音色
     materials.texts[].content 是 JSON 字符串，里面 "text" 才是字幕原文
 
 注意：
-    草稿根的 draft_content.json 是加密的，读不了；template.json 是明文，读它。
-    一个草稿可能有多个 Timelines 版本，取 mtime 最新的那个。
+    11.6 不再生成 template.json，早先那套「读明文模板」的做法已经失效。
+    现在用 jycore 解密 draft_content.json，直接读内存里的结构，
+    时间轴目录由 project.json 的 main_timeline_id 决定。
 """
 import json
 import os
+import re
 import shutil
+
+import jycore
 
 MANIFEST = "manifest.json"
 LIB_DIRNAME = "剪映配音"
 
+PLACEHOLDER = re.compile(r"##_draftpath_placeholder_[0-9A-Fa-f-]+_##")
+
 
 # ---------------- 读草稿 ----------------
-
-def _timeline(draft_dir):
-    """返回该草稿最新的 template.json 路径，没有则 None。"""
-    tl = os.path.join(draft_dir, "Timelines")
-    if not os.path.isdir(tl):
-        return None
-    cands = []
-    for name in os.listdir(tl):
-        p = os.path.join(tl, name, "template.json")
-        if os.path.isfile(p):
-            cands.append(p)
-    if not cands:
-        return None
-    return max(cands, key=os.path.getmtime)
-
 
 def _text_of(content):
     """text 素材的 content 是 JSON 字符串，取出纯文本。"""
@@ -59,19 +52,15 @@ def _text_of(content):
 def parse_voices(draft_dir):
     """从草稿里读出所有朗读音频。
 
-    返回 [{"text":字幕原文, "wav":草稿内绝对路径, "duration":秒}]
-    读不出（草稿不存在 / 没有 Timelines / 没朗读过）时返回空列表。
+    返回 [{"text":字幕原文, "wav":草稿内绝对路径, "duration":秒, "voice":音色}]
+    读不出（草稿不存在 / 没朗读过）时返回空列表。
     """
-    p = _timeline(draft_dir)
-    if not p:
-        return []
     try:
-        with open(p, encoding="utf-8") as f:
-            tpl = json.load(f)
-    except (OSError, ValueError):
+        doc = jycore.read(jycore.content_path(draft_dir))
+    except Exception:  # noqa: BLE001
         return []
 
-    m = tpl.get("materials") or {}
+    m = doc.get("materials") or {}
     texts = {t.get("id"): t for t in (m.get("texts") or [])}
 
     out = []
@@ -84,7 +73,7 @@ def parse_voices(draft_dir):
         text = _text_of(t.get("content"))
         if not text:
             continue
-        rel = (a.get("path") or "").replace("/", os.sep)
+        rel = PLACEHOLDER.sub("", a.get("path") or "").lstrip("/").replace("/", os.sep)
         wav = os.path.normpath(os.path.join(draft_dir, rel))
         if not os.path.isfile(wav):
             continue
@@ -92,6 +81,7 @@ def parse_voices(draft_dir):
             "text": text,
             "wav": wav,
             "duration": round(a.get("duration", 0) / 1e6, 3),
+            "voice": a.get("tone_effect_name") or a.get("tone_speaker") or "",
         })
     return out
 
@@ -239,7 +229,7 @@ def _main():
     if not stat["found"]:
         print("没读到朗读音频。常见原因：")
         print("  1. 还没在剪映里对字幕执行「文本朗读」")
-        print("  2. 朗读后剪映没保存就退出（草稿没写回 template.json）")
+        print("  2. 朗读后剪映没保存就退出（草稿没落盘）")
         print("  3. 选错草稿了")
         return
     print("配音库: %s" % lib_dir(build_dir))

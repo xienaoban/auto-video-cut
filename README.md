@@ -53,6 +53,37 @@
 
 ## 快速开始
 
+### 第 0 步：设一个环境变量
+
+工具**不猜**工作目录，只认 `AVC_PROJECT_DIR`：
+
+```bash
+export AVC_PROJECT_DIR=/e/project-video/生物辞典5          # Git Bash
+$env:AVC_PROJECT_DIR = 'E:\project-video\生物辞典5'        # PowerShell
+```
+
+没设、指向的目录不存在、或者里面没有 `视频/` 子目录，都会直接报错停下。这不是
+写在文档里的建议，是代码里的硬检查——同一个 session 里同时看得见草稿目录、素材目录、
+工具目录，猜错一次素材就写到别处去了。
+
+生成或回收来的素材（配音、从剪映抽回的朗读、配图）会复制进
+`$AVC_PROJECT_DIR/音频/` 和 `$AVC_PROJECT_DIR/图片/`，草稿只引用这些副本，
+不会引用剪映的 `textReading/` 缓存或工具自己的 `tmp/`。
+
+另外三个是**可选**的，写了优先、不写自动探测：
+
+| 变量 | 指向 | 不写时 |
+|---|---|---|
+| `AVC_JIANYING_DIR` | 含 `videoeditor.dll` 的那一层（如 `...\Apps\11.6.0.14552`） | 扫 `%LOCALAPPDATA%\JianyingPro\Apps\`，按版本号锚定 |
+| `AVC_DRAFT_ROOT` | 草稿根目录 | `JIANYING_DRAFT_ROOT`（旧名）→ `config.json` → 默认位置 |
+| `AVC_FFMPEG_DIR` | 含 `ffmpeg.exe` 的目录 | 走 `PATH` |
+
+写了但指错（目录里没有 `videoeditor.dll`、没有 `ffmpeg.exe`）会直接报错，
+不会静默退回自动探测——写错变量却跑出个“看起来正常”的结果最坑。
+
+java 不需要：剪映是 C++/Electron，本工具用 ctypes 直接调它的 DLL，外部依赖只有
+ffmpeg、ffprobe 和剪映本身。
+
 ```bash
 # 1. 在放素材的目录里，看一眼素材清单
 python ../auto-video-cut/scan.py .
@@ -87,7 +118,10 @@ auto-video-cut/
 ├─ install.py           安装配音依赖到 .vendor/（绿色，不碰系统 Python）
 ├─ voices.py            列出可用音色
 ├─ validate.py          草稿结构自检
-├─ jylib.py             剪映明文草稿生成库
+├─ jylib.py             从零生成草稿（剪映还没打开过的新草稿）
+├─ jycore.py            草稿文件层：定位剪映、解密读写、备份、写回
+├─ jycrypto.py          直接调 videoeditor.dll 的加解密，纯内存
+├─ jyedit.py            在已有草稿上继续加工：字幕、配音、配图、关键帧
 ├─ prep.py              素材规整（统一画幅/帧率，图片转静帧推拉）
 ├─ tts.py               配音合成（edge-tts）
 ├─ cuttts.py            把剪映文本朗读生成的语音抽成本地素材
@@ -267,10 +301,20 @@ python install.py
 
 ## 关键设计
 
-**为什么能直接写剪映草稿**：剪映 11 把 `draft_content.json` 加密了，但同目录的
-`Timelines/<id>/template.json` 是明文，暴露了 version 360000 的完整字段结构；
-草稿索引 `root_meta_info.json` 也是明文。所以按同样字段写一份明文草稿并注册索引，
-剪映就能正常打开（已在 11.3 实测）。
+**为什么能直接读写剪映草稿**：剪映 11 把 `draft_content.json` 加密了（base64 外壳 +
+无压缩密文），但 `videoeditor.dll` 里留着 `EncryptUtils` 的加解密导出函数，
+`jycrypto.py` 用 ctypes 直接调它——不逆向密钥、不编译 C++、不落临时文件。
+草稿索引 `root_meta_info.json` 一直是明文。
+
+**为什么写回要写两个地方**：编辑器加载的是
+`Timelines/<main_timeline_id>/draft_content.json`，顶层那份只是镜像。
+只改顶层，剪映打开时会用时间轴那份覆盖回去，表现成「改动被回滚」。
+所以 `jycore.write()` 会把顶层和时间轴两份连同各自的 `.bak`、`template-2.tmp` 一起写。
+
+**为什么新增片段一律克隆**：剪映自己的校验比文档严。`jyedit` 不手拼字段，
+而是拿草稿里已有的同类片段当模板，只换 id、路径、时间、文字；
+片段挂的附属素材（速度、节拍、声道、动画）也会整套复制并重新分配 id，
+保证每个片段独占自己的一份。
 
 **为什么要先转码**：`prep.py` 把所有素材统一成目标画布尺寸和恒定帧率，
 草稿里所有片段的缩放恒为 1，不会因为源素材画幅不一致而错位。
@@ -282,8 +326,10 @@ python install.py
 
 功能上做不到的事见上面「接不了的场景」，这里只列**用起来会绊脚**的：
 
-- 生成前**必须完全退出剪映**（含托盘 `JianyingProTray.exe`），否则草稿目录被占用。
-- 草稿一旦在剪映里保存就会被重新加密，不能用本工具再读回；改结构要重跑 `build.py`。
-- **剪映升级可能改字段**。本工具在 11.3 实测通过（本机另一份 11.2 的草稿结构一致），
-  但草稿格式是跟着版本走的。每次升级剪映，先做一份 20 秒短草稿回归一次，再批量跑。
+- 写入前**必须完全退出剪映**（含托盘 `JianyingProTray.exe`），否则写进去的内容会被它
+  退出时覆盖。`jycore.write()` 会先检查进程，开着就拒绝写。
+- **版本锚死在 11.6.0.14552**（`jycore.VERSION`）。草稿字段跟着剪映版本走，
+  对不上 `doctor.py` 直接 FAIL，并给出 `winget download` 的下载命令。
+- 新增片段要拿草稿里已有的同类片段当模板。草稿里一条字幕都没有时，
+  `jyedit` 不会硬造一条，而是让你先在剪映里随手加一条。
 - 它不判断素材"内容"好坏：只读时长、画幅、有没有音轨，不知道这段拍糊了没有。
