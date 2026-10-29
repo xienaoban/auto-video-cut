@@ -300,13 +300,17 @@ class Draft(object):
     # ---------------- 音频（可选，用于自录音或成品配音）----------------
     def add_audio(self, path, start_us, duration_us=None, volume=1.0):
         meta = ffprobe(path)
-        dur = int(duration_us if duration_us else meta["duration"] * US)
+        real = int(meta["duration"] * US)
+        dur = int(duration_us if duration_us else real)
+        # 夹一下：剪映朗读音频的声明时长是帧对齐向上取整的，比 wav 实际长 0~1 帧。
+        # 不夹的话 source_timerange 会越出素材末尾（validate 报「源区间越界」）。
+        dur = min(dur, real)
         mat = _clone(self._atpl)
         mat.update({
             "id": uid(),
             "path": path,
             "name": os.path.basename(path),
-            "duration": int(meta["duration"] * US),
+            "duration": real,
         })
         seg = _clone(self._aseg)
         seg.update({

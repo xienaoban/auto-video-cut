@@ -15,6 +15,9 @@ work/
 # 本地配置（每台机器的剪映路径不同）
 config.json
 
+# AI 会话记忆（WorkBuddy 工作区数据，非工具本体）
+.workbuddy/
+
 # 编辑器 / 系统
 .vscode/
 .idea/

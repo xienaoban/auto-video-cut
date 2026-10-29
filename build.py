@@ -30,6 +30,7 @@ import sys
 
 sys.dont_write_bytecode = True   # 工具目录保持只读，不生成 __pycache__
 
+import cuttts
 import jylib
 import prep
 from jylib import Draft, US
@@ -137,7 +138,10 @@ def parse_script(path):
         elif k in ("位置Y", "位置"):
             cur["位置Y"] = float(v)
 
-    return cfg, [s for s in shots if s["文案"] or s["图片"]]
+    # 只要有画面（文案/图片/素材任一），就是有效分镜。
+    # 「# 3」这种纯编号分隔行三项都空，会被过滤掉。
+    # 只写「素材 + 不字幕 + 时长」的空镜必须留下，否则过渡镜头会凭空消失。
+    return cfg, [s for s in shots if s["文案"] or s["图片"] or s["素材"]]
 
 
 # ---------------------------------------------------------------- 字幕切分
@@ -327,6 +331,58 @@ def fill_slot(draft, clip_path, t_start, slot_us, w, h, fps, cursor_store, key):
     cursor_store[key] = cursor
 
 
+# ---------------------------------------------------------------- 剪映配音
+def _cut_voices(draft_root, draft_name, build_dir, plan):
+    """剪映朗读模式：把同名草稿里的朗读音频收进本地库，再按字幕取时长。
+
+    返回 (voices, stat)：
+        voices  [[(wav, 秒, []), None, ...], ...]，与 plan 同形状；
+                单条为 None 表示这条没配音（新写的 / 还没朗读），后续按字数估。
+        stat    {"hit","total","lib","harvest"}
+    一条都没命中时 voices 返回 None，让调用方走纯估算流程。
+    """
+    stat = {"hit": 0, "total": sum(len(c) for c in plan), "lib": 0, "harvest": None}
+
+    if not draft_root:
+        try:
+            draft_root = jylib.find_draft_root()
+        except Exception:
+            draft_root = None
+    draft_dir = os.path.join(draft_root, draft_name) if draft_root else None
+    if draft_dir and os.path.isdir(draft_dir):
+        try:
+            _lib, h = cuttts.harvest(draft_dir, build_dir)
+            stat["harvest"] = h
+            if h["found"]:
+                print("剪映配音: 从草稿「%s」收回 %d 条朗读音频（新复制 %d）"
+                      % (draft_name, h["found"], h["copied"]))
+        except Exception as e:      # 草稿只读，收不回来不该阻塞出片
+            print("! 读取草稿里的朗读音频失败：%s" % e)
+
+    lib = cuttts.load(build_dir)
+    stat["lib"] = len(lib)
+    if not lib:
+        return None, stat
+
+    flat = [c for chunks in plan for c in chunks]
+    hit = sum(1 for t in flat if t in lib)
+    stat["hit"] = hit
+    if not hit:
+        return None, stat
+
+    rows = []
+    for chunks in plan:
+        cur = []
+        for t in chunks:
+            if t in lib:
+                wav, dur = lib[t]
+                cur.append((wav, dur, []))
+            else:
+                cur.append(None)
+        rows.append(cur)
+    return rows, stat
+
+
 # ---------------------------------------------------------------- 主流程
 def main():
     ap = argparse.ArgumentParser(
@@ -378,6 +434,8 @@ def main():
             use_tts = False
         else:
             tts.set_workdir(build_dir)
+            if args.no_cache:
+                tts.set_no_cache(True)
 
     # ---- 1. 切字幕 + 批量合成配音 ----
     plan = []
@@ -387,6 +445,7 @@ def main():
         plan.append(chunks)
 
     voices = None
+    cut_stat = None
     if use_tts:
         flat = [c for chunks in plan for c in chunks]
         if flat:
@@ -397,6 +456,10 @@ def main():
             voices = [[next(it) for _ in chunks] for chunks in plan]
         else:
             voices = [[] for _ in plan]
+    else:
+        # 剪映朗读模式：先试着从同名草稿里把用户已经朗读好的音频收进本地库。
+        # 命中越多，排出来越贴真实语速；一条都没命中就退回归字数估算。
+        voices, cut_stat = _cut_voices(args.draft_root, draft_name, build_dir, plan)
 
     # ---- 2. 排分镜（这一步只算，不落盘）----
     pool = ClipPool(workdir)
@@ -406,9 +469,16 @@ def main():
         chunks = plan[i - 1]
 
         segs = []
-        if use_tts and chunks:
-            for text, (wav, dur) in zip(chunks, voices[i - 1]):
-                segs.append((text, int(round(dur * US)), wav))
+        if voices is not None and chunks:
+            for text, v in zip(chunks, voices[i - 1]):
+                if v is not None:
+                    wav, dur, words = v
+                    segs.append((text, int(round(dur * US)), wav, words))
+                else:
+                    # 这条没有配音（新写的、或还没在剪映里朗读）：单独按估速算，
+                    # 不按整段比例分摊，否则一条缺配音会把同分镜其他条一起带偏
+                    est = clean_len(text) / float(cfg["est_rate"]) * US
+                    segs.append((text, max(int(est), int(0.6 * US)), None, []))
             dur_us = sum(s[1] for s in segs)
         else:
             total = int(clean_len(shot["文案"]) / float(cfg["est_rate"]) * US) \
@@ -417,7 +487,7 @@ def main():
             if chunks:
                 tc = sum(clean_len(c) for c in chunks)
                 for c in chunks:
-                    segs.append((c, int(total * clean_len(c) / tc), None))
+                    segs.append((c, int(total * clean_len(c) / tc), None, []))
 
         if shot["时长"]:
             dur_us = int(shot["时长"] * US)
@@ -449,9 +519,24 @@ def main():
         print("%-4d %-8.2f %-7.2f %-26s %s"
               % (r["i"], r["start"] / US, r["slot"] / US, tag[:24], r["text"][:30]))
     print("-" * 92)
+    if use_tts:
+        voice_desc = "edge " + cfg["voice"]
+    elif cut_stat and cut_stat["hit"]:
+        voice_desc = "剪映配音 %d/%d 条" % (cut_stat["hit"], cut_stat["total"])
+    else:
+        voice_desc = "剪映朗读（按字数估算）"
     print("总时长 %.2f 秒 / %d 分镜 / %d 字幕 / %dx%d@%gfps / 配音=%s"
           % (total_us / US, len(rows), sum(len(r["segs"]) for r in rows), w, h, fps,
-             ("edge " + cfg["voice"]) if use_tts else "剪映朗读"))
+             voice_desc))
+    if cut_stat and 0 < cut_stat["hit"] < cut_stat["total"]:
+        print("! %d 条字幕在配音库里没有对应音频，已按 %.1f 字/秒估算"
+              % (cut_stat["total"] - cut_stat["hit"], float(cfg["est_rate"])))
+
+    all_segs = [s for r in rows for s in r["segs"]]
+    if use_tts and all_segs:
+        with_words = sum(1 for s in all_segs if s[3])
+        note = "" if with_words == len(all_segs) else "（缺的是旧缓存，加 --no-cache 可补齐）"
+        print("词级时间 %d/%d 条%s" % (with_words, len(all_segs), note))
 
     if args.dry_run:
         print("\n[dry-run] 未生成草稿。转码/配音缓存仍会落在 %s（下次生成可直接复用）"
@@ -471,7 +556,7 @@ def main():
                       cursor_store, r["src"])
 
         acc = 0
-        for text, seg_us, wav in r["segs"]:
+        for text, seg_us, wav, _words in r["segs"]:
             draft.add_text(text, r["start"] + acc, seg_us,
                            y=r["y"] if r["y"] is not None else sub_y,
                            font_size=r["fs"] or float(cfg["font_size"]),
@@ -486,6 +571,32 @@ def main():
     backup = os.path.join(build_dir, "draft_content.json")
     with open(backup, "w", encoding="utf-8") as f:
         json.dump(draft.d, f, ensure_ascii=False)
+
+    # 字幕时间轴：绝对毫秒，词级偏移已叠加到整条时间线上。
+    # 逐字高亮、SRT 导出都从这里取，别再自己算一遍。
+    timeline = {"draft": draft_name, "width": w, "height": h, "fps": fps,
+                "duration": round(total_us / US, 3),
+                "voice": cfg["voice"] if use_tts else ("剪映" if voices is not None else None),
+                "chunks": []}
+    for r in rows:
+        acc = 0
+        for text, seg_us, wav, words in r["segs"]:
+            base = (r["start"] + acc) / US
+            timeline["chunks"].append({
+                "scene": r["i"],
+                "text": text,
+                "start": round(base, 3),
+                "duration": round(seg_us / US, 3),
+                "audio": rel(wav, workdir).replace("\\", "/") if wav else None,
+                "words": [{"text": x["text"],
+                           "start": round(base * 1000 + x["start"], 1),
+                           "end": round(base * 1000 + x["end"], 1)}
+                          for x in words],
+            })
+            acc += seg_us
+    with open(os.path.join(build_dir, "字幕时间轴.json"), "w", encoding="utf-8") as f:
+        json.dump(timeline, f, ensure_ascii=False, indent=1)
+
     with open(os.path.join(build_dir, "分镜表.md"), "w", encoding="utf-8") as f:
         f.write("# %s\n\n总时长 %.2f 秒 · %d 分镜 · %d 字幕 · %dx%d@%gfps\n\n"
                 % (draft_name, total_us / US, len(rows),
@@ -499,7 +610,7 @@ def main():
         f.write("\n## 字幕明细\n\n| 开始 | 时长 | 文本 | 音频 |\n|---|---|---|---|\n")
         for r in rows:
             acc = 0
-            for text, seg_us, wav in r["segs"]:
+            for text, seg_us, wav, _words in r["segs"]:
                 f.write("| %.2f | %.2f | %s | %s |\n"
                         % ((r["start"] + acc) / US, seg_us / US,
                            text.replace("|", "\\|"),
@@ -510,8 +621,13 @@ def main():
     print("中间产物:   %s" % build_dir)
     if use_tts:
         print("配音已写入草稿，剪映里直接预览即可")
+    elif cut_stat and cut_stat["hit"] == cut_stat["total"]:
+        print("用剪映配音排好了，剪映里直接预览即可（音频已在本地库里）")
+    elif cut_stat and cut_stat["hit"]:
+        print("部分字幕还没配音。补齐：在剪映里只朗读缺的那几条 → 关掉剪映 → 重跑本命令")
     else:
         print("下一步：选中字幕轨 → 文本朗读 → 生成配音（语速建议 1.0）")
+        print("朗读完关掉剪映，重跑本命令即可按真实配音时长重排")
 
 
 if __name__ == "__main__":
