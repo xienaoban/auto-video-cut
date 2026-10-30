@@ -395,6 +395,8 @@ def main():
     ap.add_argument("--draft-root", default=None, help="剪映草稿根目录（一般不用填）")
     ap.add_argument("--dry-run", action="store_true", help="只打印分镜表，不写任何文件")
     ap.add_argument("--no-cache", action="store_true", help="忽略缓存，强制重新转码/配音")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="允许覆盖同名草稿（会先备份整个旧草稿；不加则拒绝）")
     ap.add_argument("--debug", action="store_true", help="出错时打印完整堆栈")
     args = ap.parse_args()
 
@@ -565,7 +567,7 @@ def main():
                 draft.add_audio(wav, r["start"] + acc, seg_us)
             acc += seg_us
 
-    path = draft.save()
+    path = draft.save(overwrite=args.overwrite, backup_dir=workdir)
 
     # ---- 5. 留一份可移植的副本供 check/追溯 ----
     backup = os.path.join(build_dir, "draft_content.json")

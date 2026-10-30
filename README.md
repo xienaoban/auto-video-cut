@@ -96,6 +96,8 @@ python ../auto-video-cut/build.py . --dry-run
 
 # 3. 完全退出剪映，正式生成
 python ../auto-video-cut/build.py .
+#    同名草稿已存在时会报错拒绝（不会覆盖你的剪辑）
+#    确实要重建才加 --overwrite，它会先备份整个旧草稿到 .tmp/
 
 # 4. 结构自检
 python ../auto-video-cut/validate.py .
@@ -281,11 +283,11 @@ python install.py
 
 ## 作为 git 仓库
 
-适合。纯文本部分只有 **138KB**，`git add` 之后仓库约 **43KB / 22 个文件**。
+适合。纯文本部分只有 **250KB**（255840 字节），`git add` 之后共 **31 个文件**。
 
 | 内容 | 大小 | 入库 | 理由 |
 |---|---|---|---|
-| 代码 + 文档 + `assets/` 字段模板 | 138KB | 是 | 纯文本，`assets/` 是运行必需的剪映字段结构 |
+| 代码 + 文档 + `assets/` 字段模板 | 250KB | 是 | 纯文本，`assets/` 是运行必需的剪映字段结构 |
 | `.vendor/`（edge-tts 等 9 个包） | 4.5MB | **否** | 含 9 个 `cp313-win_amd64.pyd`，平台+Python 版本绑定 |
 | `config.json` | 千字节 | **否** | 本机剪映路径、字体路径，每台机器不同 |
 | `.jybuild/` | 与素材等大 | **否** | 转码和配音缓存，随时可重建 |

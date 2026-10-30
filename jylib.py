@@ -354,7 +354,13 @@ class Draft(object):
         self.d["duration"] = end
         return end
 
-    def save(self):
+    def save(self, overwrite=False, backup_dir=None):
+        """写出一份明文草稿。
+
+        目标目录已存在且非空时**默认拒绝**。覆盖等于把用户在剪映里做的剪辑全部
+        删掉重建；以前的实现直接 `rmtree(ignore_errors=True)`，删失败都不吭声。
+        `overwrite=True` 才覆盖，覆盖前会把整个旧草稿备份到 `backup_dir/.tmp/`。
+        """
         if not self.root:
             raise RuntimeError(DRAFT_ROOT_HINT)
         end = self._build_tracks()
@@ -364,20 +370,34 @@ class Draft(object):
         self.d["path"] = os.path.join(self.root, self.name)
 
         out = os.path.join(self.root, self.name)
-        if os.path.exists(out):
-            # 只清掉自己的文件；剪映自己生成的子目录（Timelines/textReading/.backup）
-            # 可能被占用，删不掉也无所谓，属于剪映的缓存
-            shutil.rmtree(out, ignore_errors=True)
-        os.makedirs(out, exist_ok=True)
-
-        stale = os.path.join(out, "draft_content.json")
-        if os.path.exists(stale):
+        exists = False
+        if os.path.isdir(out):
             try:
-                os.remove(stale)
+                exists = bool(os.listdir(out))
             except OSError:
+                exists = True
+
+        if exists:
+            if not overwrite:
                 raise RuntimeError(
-                    "草稿目录被占用，无法覆盖：%s\n"
-                    "请先**完全退出剪映**（含托盘进程 JianyingProTray.exe）再重新运行。" % out)
+                    "草稿「%s」已经存在，拒绝覆盖。\n"
+                    "  位置：%s\n\n"
+                    "重跑会把它整个删掉重建，你在剪映里做的剪辑、调色、手动加的\n"
+                    "字幕和音乐都会丢。两个选择：\n"
+                    "  · 保留旧草稿 → 换个名字：--name 新名字\n"
+                    "  · 确实要重建 → 加 --overwrite（会先备份整个旧草稿）"
+                    % (self.name, out))
+            if backup_dir:
+                bak = jycore.backup(out, backup_dir)
+                print("已备份旧草稿到 %s" % bak)
+            try:
+                shutil.rmtree(out)
+            except OSError as e:
+                raise RuntimeError(
+                    "草稿目录删不掉：%s\n%s\n"
+                    "请完全退出剪映（含托盘进程 JianyingProTray.exe）再试。"
+                    % (out, e))
+        os.makedirs(out, exist_ok=True)
 
         with open(os.path.join(out, "draft_content.json"), "w", encoding="utf-8") as f:
             json.dump(self.d, f, ensure_ascii=False)
